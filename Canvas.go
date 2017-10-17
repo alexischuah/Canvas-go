@@ -7,6 +7,7 @@ import (
     "encoding/base64"
     "fmt"
     "github.com/tidwall/gjson"
+    "io"
     "io/ioutil"
     "log"
     "net/http"
@@ -93,8 +94,8 @@ func SortParams(rawQuery string) string{
     return rawQuery
 }
 
-//Generate Headers and parse response --Current WIP--
-func httpRequest(msg, key, canvasURL, timestamp string){
+//Generate Headers, parse response and sync folder
+func httpSyncRequest(msg, key, canvasURL, timestamp string) {
 
     client := &http.Client{}
     req, err := http.NewRequest("GET", canvasURL, nil)
@@ -116,11 +117,78 @@ func httpRequest(msg, key, canvasURL, timestamp string){
 
     var respMsg Message
     gjson.Unmarshal(body, &respMsg)
+    
     fmt.Printf("Schema Version: %s, Incomplete: %t \n", respMsg.SchemaVersion, respMsg.Incomplete)
-    fmt.Println("File names:")
-    for i:=0; i<5; i++{
-        fmt.Println(respMsg.Files[i].Filename)
+
+    dirPath := "Downloads"
+    result := createDir(dirPath)
+    fmt.Println(dirPath, "folder created: ", result)
+    fmt.Println("Files downloaded: ")
+    if (result) {
+        for i:=0; i<5; i++{
+            dlErr := downloadFile(dirPath+"/"+respMsg.Files[i].Filename, respMsg.Files[i].FileURL)
+            if dlErr != nil {
+                fmt.Println("Download error: ", dlErr)
+            }
+            fmt.Println(respMsg.Files[i].Filename)
+        }
+    } else {
+        for i:=0; i<5; i++{
+            if _, err := os.Stat(dirPath+"/"+respMsg.Files[i].Filename); os.IsNotExist(err) {
+                dlErr := downloadFile(dirPath+"/"+respMsg.Files[i].Filename, respMsg.Files[i].FileURL)
+                if dlErr != nil {
+                    fmt.Println("Download error: ", dlErr)
+                }
+                fmt.Println(respMsg.Files[i].Filename)
+            }
+        }
     }
+
+}
+
+//Check if dir exists
+func createDir(dirPath string) bool{
+    src, err := os.Stat(dirPath)
+
+    if os.IsNotExist(err){
+        errDir := os.MkdirAll(dirPath, 0755)
+        if errDir !=nil{
+            panic(err)
+        }
+        return true
+    }
+
+    if src.Mode().IsRegular(){
+        fmt.Println(dirPath, "already exists as a file!")
+        return false
+    }
+
+    return false
+}
+
+//Download file
+func downloadFile(filepath string, dlURL string) (err error){
+    
+    //Create file
+    out, err := os.Create(filepath)
+    if err != nil {
+        return err
+    }
+    defer out.Close()
+
+    //Get Data
+    resp, err := http.Get(dlURL)
+    if err != nil{
+        return err
+    }
+    defer resp.Body.Close()
+
+    //Write body to file
+    _, err = io.Copy(out, resp.Body)
+    if err != nil{
+        return err
+    }
+    return nil
 }
 
 func main(){
@@ -129,5 +197,5 @@ func main(){
     //Timestamp, replace UTC with GMT and convert to string in standard RFC1123 format
     timestamp := strings.Replace(time.Now().UTC().Format(time.RFC1123), "UTC", "GMT", -1)
     msg := ComputeHash(timestamp, canvasURL, secret)
-    httpRequest(msg, key, canvasURL, timestamp)
+    httpSyncRequest(msg, key, canvasURL, timestamp)
 }

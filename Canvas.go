@@ -4,6 +4,7 @@ import (
     "bufio"
     "crypto/hmac"
     "crypto/sha256"
+//    "database/sql"
     "encoding/base64"
     "fmt"
     "github.com/tidwall/gjson"
@@ -35,6 +36,8 @@ type Message struct{
 
 //Read File for Secret and Key
 func ReadFile() (key, secret string){
+
+    //!!Change Path to key and secret here. Stored as plain text in another file and read line by line!!//
     path := "Special.txt"
     file, err := os.Open(path)
     if err !=nil {
@@ -120,15 +123,22 @@ func httpSyncRequest(msg, key, canvasURL, timestamp string) {
     
     fmt.Printf("Schema Version: %s, Incomplete: %t \n", respMsg.SchemaVersion, respMsg.Incomplete)
 
-    dirPath := "Downloads"
+    //!!Change Download folder here!!//
+    dirPath := "Downloads" 
+
     result := createDir(dirPath)
     fmt.Println(dirPath, "folder created: ", result)
     fmt.Println("Files downloaded: ")
-    if (result) {
+
+    dlCounter := 0
+    //If directory never existed, just download files. Else, check if files exists before downloading
+    if result {
         for i:=0; i<5; i++{
             dlErr := downloadFile(dirPath+"/"+respMsg.Files[i].Filename, respMsg.Files[i].FileURL)
             if dlErr != nil {
                 fmt.Println("Download error: ", dlErr)
+            } else {
+                dlCounter++
             }
             fmt.Println(respMsg.Files[i].Filename)
         }
@@ -138,12 +148,16 @@ func httpSyncRequest(msg, key, canvasURL, timestamp string) {
                 dlErr := downloadFile(dirPath+"/"+respMsg.Files[i].Filename, respMsg.Files[i].FileURL)
                 if dlErr != nil {
                     fmt.Println("Download error: ", dlErr)
+                } else {
+                    dlCounter++
                 }
                 fmt.Println(respMsg.Files[i].Filename)
             }
         }
     }
-
+    if dlCounter==0 {
+        fmt.Println("Files are synced up.")
+    }
 }
 
 //Check if dir exists
@@ -168,7 +182,7 @@ func createDir(dirPath string) bool{
 
 //Download file
 func downloadFile(filepath string, dlURL string) (err error){
-    
+
     //Create file
     out, err := os.Create(filepath)
     if err != nil {
@@ -197,5 +211,8 @@ func main(){
     //Timestamp, replace UTC with GMT and convert to string in standard RFC1123 format
     timestamp := strings.Replace(time.Now().UTC().Format(time.RFC1123), "UTC", "GMT", -1)
     msg := ComputeHash(timestamp, canvasURL, secret)
+    //Sync files to local
     httpSyncRequest(msg, key, canvasURL, timestamp)
+    //Connect to DB
+
 }

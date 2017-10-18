@@ -1,5 +1,6 @@
 # Canvas-go
 
-Work in progress. 
+## ===== Work in Progress =====
 
-Using golang to access Canvas API.
+Using golang to access Canvas API and sync to latest. 
+
